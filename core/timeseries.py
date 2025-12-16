@@ -61,6 +61,9 @@ class TimeSeries:
     def to_pandas(self) -> pd.Series:
         return self.data
 
+    def to_list(self) -> list[tuple[...]]:
+        return list(zip(self.times, self.values))
+
     def get_times(self) -> pd.DatetimeIndex:
         return self.data.index
 
@@ -77,6 +80,20 @@ class TimeSeries:
 
     def head(self) -> pd.Series:
         return self.data.head()
+
+    def min(self) -> float:
+        if not (isinstance(self.values[0], int) or isinstance(self.values[0], float)):
+            raise TypeError(
+                "Values of series are non-numeric, unnable to evaluate `min`/`max`. Consider casting to numeric values: `.to_numeric()`"
+            )
+        return self.data.min()
+
+    def max(self) -> float:
+        if not (isinstance(self.values[0], int) or isinstance(self.values[0], float)):
+            raise TypeError(
+                "Values of series are non-numeric, unnable to evaluate `min`/`max`. Consider casting to numeric values: `.to_numeric()`"
+            )
+        return self.data.max()
 
     def size(self) -> int:
         return len(self.data)
@@ -131,11 +148,36 @@ class TimeSeries:
         series = pd.Series(data, index=self.data.index)
         return TimeSeries(series, name), best_lambda
 
+    def rename(self, name: str) -> TimeSeries:
+        return TimeSeries(self.data.copy(), name)
+
     def to_numeric(self, errors: str = "coerce") -> TimeSeries:
         data = pd.to_numeric(self.data, errors=errors)
         return TimeSeries(data, self.name)
 
-    def map(self, f: Callable) -> TimeSeries:
+    def count_na(self) -> int:
+        return self.data.isna().sum()
+
+    def count_null(self) -> int:
+        return self.data.isnull().sum()
+
+    def mean(self) -> float:
+        return self.data.mean()
+
+    def median(self) -> float:
+        return self.data.median()
+
+    def variance(self) -> float:
+        return self.data.var()
+
+    def stddev(self) -> float:
+        return self.data.std()
+
+    def replace_na(self, value: float) -> TimeSeries:
+        data = self.data.fillna(value)
+        return TimeSeries(data, self.name)
+
+    def map(self, f: Callable[[pd.Series], pd.Series]) -> TimeSeries:
         data = f(self.data)
         return TimeSeries(data, f"{f.__name__}_{self.name}")
 
