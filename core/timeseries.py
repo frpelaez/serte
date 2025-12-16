@@ -78,6 +78,12 @@ class TimeSeries:
     def head(self) -> pd.Series:
         return self.data.head()
 
+    def size(self) -> int:
+        return len(self.data)
+
+    def __len__(self) -> int:
+        return self.size()
+
     def log(self) -> TimeSeries:
         if (self.data <= 0).any():
             raise ValueError(
