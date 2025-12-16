@@ -9,8 +9,3 @@ wheels/
 # Virtual environments
 .venv
 
-# Datasets
-data/*
-
-# Testing
-src/mini_test.py
