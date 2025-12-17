@@ -151,6 +151,11 @@ class TimeSeries:
     def rename(self, name: str) -> TimeSeries:
         return TimeSeries(self.data.copy(), name)
 
+    def with_index(self, index: pd.DatetimeIndex) -> TimeSeries:
+        index = pd.to_datetime(index)
+        self.data.index = index
+        return TimeSeries(self.data, self.name)
+
     def to_numeric(self, errors: str = "coerce") -> TimeSeries:
         data = pd.to_numeric(self.data, errors=errors)
         return TimeSeries(data, self.name)
@@ -201,6 +206,19 @@ class TimeSeries:
             suffix += f"_Sord{seasonal_order}_Slag{seasonal_lag}"
         return TimeSeries(temp, f"{self.name}{suffix}")
 
+    def moving_avg(self, kernel_range: int) -> TimeSeries:
+        temp = np.zeros(shape=(2 * kernel_range + len(self.data),))
+        temp[kernel_range:-kernel_range] = self.data.copy()
+        temp[:kernel_range] = np.array([self.data[0] for _ in range(kernel_range)])
+        temp[-kernel_range:] = np.array([self.data[-1] for _ in range(kernel_range)])
+        kernel = np.ones(shape=(2 * kernel_range + 1,))
+        kernel /= kernel.sum()
+        for i in range(kernel_range, len(temp) - kernel_range):
+            temp[i] = temp[i - kernel_range : i + kernel_range + 1].dot(kernel)
+        temp = temp[kernel_range:-kernel_range]
+        data = pd.Series(temp, self.data.index)
+        return TimeSeries(data, f"mov_avg_{kernel_range}_{self.name}")
+
     def plot(self):
         self.data.plot(title=self.name)
         plt.show()
@@ -244,6 +262,10 @@ def _test():
     print("\n- Diferenciar la serie -")
     print(series.diff(order=1).data)
     print(series.diff(order=2).data)
+
+    # Media móvil
+    print("\n- Aplicamos una media móvil -")
+    print(series.moving_avg(1).data)
 
     # Plot rápido
     series.plot()

@@ -1,3 +1,8 @@
+from typing import Optional
+
+import numpy as np
+import pandas as pd
+import requests
 from timeseries import TimeSeries
 
 
@@ -33,6 +38,29 @@ def read_json(
     )
 
 
+def http(
+    url: str | bytes, val_col_name: str, index: Optional[pd.DatetimeIndex] = None
+) -> TimeSeries:
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = np.array(
+            list(
+                map(
+                    float,
+                    filter(lambda s: len(s) > 0, response.content.splitlines()),
+                )
+            )
+        )
+    else:
+        raise requests.HTTPError(
+            f"Request failed with status code {response.status_code}"
+        )
+    data = pd.Series(data)
+    if index:
+        data.index = pd.to_datetime(index)
+    return TimeSeries(data, val_col_name)
+
+
 def _test():
     srs_csv = read_csv("data/data.csv", "sells", "date")
     print(srs_csv, srs_csv.data.head())
@@ -40,6 +68,8 @@ def _test():
     print(srs_xlsx, srs_xlsx.data.head())
     srs_json = read_json("data/data.json", "bitcoin", "date")
     print(srs_json, srs_json.data.head())
+    url = "http://verso.mat.uam.es/~joser.berrendero/datos/gas6677.dat"
+    print(http(url, "srs", 0))
 
 
 if __name__ == "__main__":
