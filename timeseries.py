@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+from decomposition import DecompositionResult
 
 
 class TimeSeries:
@@ -55,8 +59,33 @@ class TimeSeries:
         df = pd.read_json(filepath, convert_dates=False, **kwargs)
         if index_col_name in df.columns:
             df = df.set_index(index_col_name)
+        else:
+            raise ValueError(
+                f"Column '{index_col_name}' does not exit in the provided data"
+            )
         df.index = pd.to_datetime(df.index)
         return TimeSeries(df[value_col_name], value_col_name)
+
+    @staticmethod
+    def from_spss(
+        filepath: str,
+        value_col_name: str,
+        index_col_name: str,
+        convert_categoricals: bool = True,
+    ) -> TimeSeries:
+        df = pd.read_spss(filepath, convert_categoricals=convert_categoricals)
+        if index_col_name in df.columns:
+            df = df.set_index(index_col_name)
+        else:
+            raise ValueError(
+                f"Column '{index_col_name}' does not exit in the provided data"
+            )
+        df.index = pd.to_datetime(df.index)
+        return TimeSeries(df[value_col_name], name=value_col_name)
+
+    def to_csv(self, output: str, **kwargs):
+        self.data.to_csv(output, **kwargs)
+        print(f"TimeSeries successfully written to {output}")
 
     def to_pandas(self) -> pd.Series:
         return self.data
@@ -146,10 +175,21 @@ class TimeSeries:
             best_lambda = lmd
             name = f"box-cox_{lmd:.2f}_{self.name}"
         series = pd.Series(data, index=self.data.index)
+        if abs(best_lambda - 1.0) <= 0.05:
+            print(
+                "WARN: lambda value close to 1. Consider discarding the transformation"
+            )
         return TimeSeries(series, name), best_lambda
 
-    def rename(self, name: str) -> TimeSeries:
-        return TimeSeries(self.data.copy(), name)
+    def with_name(self, name: str) -> TimeSeries:
+        data = self.data.copy()
+        data.columns = [name]
+        return TimeSeries(data, name)
+
+    def with_index_name(self, index_name) -> TimeSeries:
+        data = self.data.copy()
+        data.index.name = index_name
+        return TimeSeries(data, self.name)
 
     def with_index(self, index: pd.DatetimeIndex) -> TimeSeries:
         index = pd.to_datetime(index)
@@ -182,7 +222,7 @@ class TimeSeries:
         data = self.data.fillna(value)
         return TimeSeries(data, self.name)
 
-    def map(self, f: Callable[[pd.Series], pd.Series]) -> TimeSeries:
+    def apply(self, f: Callable[[pd.Series], pd.Series]) -> TimeSeries:
         data = f(self.data)
         return TimeSeries(data, f"{f.__name__}_{self.name}")
 
@@ -209,8 +249,10 @@ class TimeSeries:
     def moving_avg(self, kernel_range: int) -> TimeSeries:
         temp = np.zeros(shape=(2 * kernel_range + len(self.data),))
         temp[kernel_range:-kernel_range] = self.data.copy()
-        temp[:kernel_range] = np.array([self.data[0] for _ in range(kernel_range)])
-        temp[-kernel_range:] = np.array([self.data[-1] for _ in range(kernel_range)])
+        temp[:kernel_range] = np.array([self.data.iloc[0] for _ in range(kernel_range)])
+        temp[-kernel_range:] = np.array(
+            [self.data.iloc[-1] for _ in range(kernel_range)]
+        )
         kernel = np.ones(shape=(2 * kernel_range + 1,))
         kernel /= kernel.sum()
         for i in range(kernel_range, len(temp) - kernel_range):
@@ -218,6 +260,105 @@ class TimeSeries:
         temp = temp[kernel_range:-kernel_range]
         data = pd.Series(temp, self.data.index)
         return TimeSeries(data, f"mov_avg_{kernel_range}_{self.name}")
+
+    def smooth_moving_avg(self, window: int, center: bool = False) -> TimeSeries:
+        data = self.data.rolling(window=window, center=center).mean()
+        data = data.dropna()
+        return TimeSeries(data, f"SMA_{window}_{self.name}")
+
+    def smooth_exponential(
+        self, span: Optional[int] = None, alpha: Optional[float] = None
+    ) -> TimeSeries:
+        if span:
+            data = self.data.ewm(span=span).mean()
+            suffix = f"span{span}"
+        else:
+            data = self.data.ewm(alpha=alpha).mean()
+            suffix = f"alpha{alpha}"
+        return TimeSeries(data, f"ExpMA_{suffix}_{self.name}")
+
+    def smooth_holt_winters(
+        self,
+        trend: Optional[str] = None,
+        seasonal: Optional[str] = None,
+        seasonal_periods: Optional[int] = None,
+    ) -> TimeSeries:
+        data = self.data
+        if data.index.freq is None:
+            try:
+                data.index.freq = pd.infer_freq(data.index)
+            except:
+                pass
+        model = ExponentialSmoothing(
+            data,
+            trend=trend,
+            seasonal=seasonal,
+            seasonal_periods=seasonal_periods,
+            initialization_method="estimated",
+        )
+        fit_model = model.fit()
+        val_name = f"HW_{self.name}"
+        new_data = fit_model.fittedvalues.to_frame(name=val_name)[val_name]
+        return TimeSeries(new_data, val_name)
+
+    def nsdiffs(self, period: int, test: str = "ocsb", max_diffs: int = 3) -> int:
+        if test in ["ocsb", "ch"]:
+            try:
+                from pdmarima.arima.utils import nsdiffs as pm_nsdiffs
+
+                values = self.data[self.name]
+                diffs = pm_nsdiffs(values, m=period, test=test, max_D=max_diffs)
+                return diffs
+            except ImportError:
+                print(
+                    "WARN: to use 'ocsb' or 'ch' tests you need to install 'pmdarima'"
+                )
+                print("'seas' (seasonal force) will be used instead")
+                test = "seas"
+        if test == "seas":
+            try:
+                decomp = self.decompose(model="additive", period=period)
+            except:
+                print("WARN: time series too short")
+                return 0
+            resid = decomp.resid.data
+            seas = decomp.seasonal.data
+            var_resid = resid.var()
+            compound_var = (resid + seas).var()
+            if compound_var == 0:
+                return 0
+            strength = max(0, 1 - (var_resid / compound_var))
+            if strength > 0.64:
+                return 1
+            else:
+                return 0
+        return 0
+
+    def decompose(
+        self, model: str = "additive", period: Optional[int] = None
+    ) -> DecompositionResult:
+        if model == "multiplicative" and (self.data <= 0).any():
+            raise ValueError(
+                "Multiplicative model requires all values to be greater than zero"
+            )
+        res = seasonal_decompose(
+            self.data, model=model, period=period, extrapolate_trend="freq"
+        )
+        trend_ts = TimeSeries(pd.Series(res.trend).dropna(), f"trend_{self.name}")
+        seasonal_ts = TimeSeries(
+            pd.Series(res.seasonal).dropna(), f"seasonal_{self.name}"
+        )
+        resid_ts = TimeSeries(pd.Series(res.resid).dropna(), f"resid_{self.name}")
+        return DecompositionResult(self, trend_ts, seasonal_ts, resid_ts)
+
+    def split_train_test[_Index](
+        self,
+        train_fraction: Optional[float] = 0.8,
+        test_fraction: Optional[float] = None,
+        split_index: Optional[_Index] = None,
+        random_state: Optional[np.random.RandomState] = None,
+    ) -> tuple[TimeSeries, TimeSeries]:
+        raise NotImplementedError()
 
     def plot(self):
         self.data.plot(title=self.name)
@@ -241,12 +382,12 @@ def _test():
     print(series.inv().data)
     print(series.pow(2).data)
     print(series.box_cox()[0].data)
-    print(series.map(lambda x: 3 * x - x**2).data)
+    print(series.apply(lambda x: 3 * x - x**2).data)
 
     def mi_transformacion(x):
         return 1 / np.sqrt(x)
 
-    print(series.map(mi_transformacion).data)
+    print(series.apply(mi_transformacion).data)
 
     # Iterar sobre parejas (fecha, valor)
     print("\n- Iterar sobre fechas, valores o parejas fecha-valor")
