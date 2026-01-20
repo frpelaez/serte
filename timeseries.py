@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.stattools import acf, pacf
 
 from decomposition import DecompositionResult
 
@@ -359,6 +361,64 @@ class TimeSeries:
         random_state: Optional[np.random.RandomState] = None,
     ) -> tuple[TimeSeries, TimeSeries]:
         raise NotImplementedError()
+
+    def plot_acf(
+        self, lags: int = 20, alpha: float = 0.05, return_values: bool = False
+    ):
+        fig, ax = plt.subplots(figsize=(10, 5))
+        plot_acf(
+            self.get_values(),
+            lags=lags,
+            alpha=alpha,
+            ax=ax,
+            zero=True,
+            title=f"Simple autocorrelation (SAC) - {self.name}",
+        )
+        plt.xlabel("Lags")
+        plt.show()
+        if return_values:
+            return acf(self.data[self.name], lags)
+
+    def plot_pacf(
+        self,
+        lags: int = 20,
+        alpha: float = 0.05,
+        method: str = "ywm",
+        return_values: bool = False,
+    ):
+        fig, ax = plt.subplots(figsize=(10, 5))
+        plot_pacf(
+            self.get_values(),
+            lags=lags,
+            alpha=alpha,
+            method=method,
+            ax=ax,
+            zero=True,
+            title=f"Partial autocorrelation (PAC) - {self.name}",
+        )
+        plt.xlabel("Lags")
+        plt.show()
+        if return_values:
+            return pacf(self.data[self.name], lags)
+
+    def plot_correlograms(self, lags: int = 20):
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
+        plot_acf(
+            self.get_values(),
+            lags=lags,
+            zero=True,
+            ax=ax1,
+            title=f"SAC - {self.name}",
+        )
+        plot_pacf(
+            self.get_values(),
+            lags=lags,
+            zero=True,
+            method="ywm",
+            ax=ax2,
+            title=f"PAC - {self.name}",
+        )
+        plt.show()
 
     def plot(self):
         self.data.plot(title=self.name)
