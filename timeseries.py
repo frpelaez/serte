@@ -13,7 +13,7 @@ from decomposition import DecompositionResult
 
 
 class TimeSeries:
-    def __init__(self, data: pd.Series, name: str = "series") -> TimeSeries:
+    def __init__(self, data: pd.Series, name: str = "series") -> 'TimeSeries':
         if not isinstance(data, pd.Series):
             raise TypeError("Provided data must be a pandas Series")
         self.data = data.sort_index()
@@ -26,7 +26,7 @@ class TimeSeries:
     @staticmethod
     def from_dataframe(
         df: pd.DataFrame, value_col_name: str, index_col_name: Optional[str] = None
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         if index_col_name:
             df = df.set_index(index_col_name)
             df.index = pd.to_datetime(df.index)
@@ -35,7 +35,7 @@ class TimeSeries:
     @staticmethod
     def from_csv(
         filepath: str, value_col_name: str, index_col_name: str, **kwargs
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         df = pd.read_csv(
             filepath, parse_dates=[index_col_name], index_col=index_col_name, **kwargs
         )
@@ -44,7 +44,7 @@ class TimeSeries:
     @staticmethod
     def from_excel(
         filepath: str, value_col_name: str, index_col_name: str, sheet_name=0, **kwargs
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         df = pd.read_excel(
             filepath,
             sheet_name=sheet_name,
@@ -57,7 +57,7 @@ class TimeSeries:
     @staticmethod
     def from_json(
         filepath: str, value_col_name: str, index_col_name: str, **kwargs
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         df = pd.read_json(filepath, convert_dates=False, **kwargs)
         if index_col_name in df.columns:
             df = df.set_index(index_col_name)
@@ -74,7 +74,7 @@ class TimeSeries:
         value_col_name: str,
         index_col_name: str,
         convert_categoricals: bool = True,
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         df = pd.read_spss(filepath, convert_categoricals=convert_categoricals)
         if index_col_name in df.columns:
             df = df.set_index(index_col_name)
@@ -132,7 +132,7 @@ class TimeSeries:
     def __len__(self) -> int:
         return self.size()
 
-    def log(self) -> TimeSeries:
+    def log(self) -> 'TimeSeries':
         if (self.data <= 0).any():
             raise ValueError(
                 "Series contains negative values, unnable to apply 'log' transformation"
@@ -140,7 +140,7 @@ class TimeSeries:
         data = np.log(self.data)
         return TimeSeries(data, f"log_{self.name}")
 
-    def sqrt(self) -> TimeSeries:
+    def sqrt(self) -> 'TimeSeries':
         if (self.data <= 0).any():
             raise ValueError(
                 "Series contains negative values, unnable to apply 'sqrt' transformation"
@@ -148,7 +148,7 @@ class TimeSeries:
         data = np.sqrt(self.data)
         return TimeSeries(data, f"sqrt_{self.name}")
 
-    def inv(self) -> TimeSeries:
+    def inv(self) -> 'TimeSeries':
         if (self.data == 0).any():
             raise ValueError(
                 "Series contains null values, unnable to apply 'inv' transformation"
@@ -156,7 +156,7 @@ class TimeSeries:
         data = 1 / self.data
         return TimeSeries(data, f"inv_{self.name}")
 
-    def pow(self, power: float) -> TimeSeries:
+    def pow(self, power: float) -> 'TimeSeries':
         if power < 0 and (self.data <= 0).any():
             raise ValueError(
                 "Provided power is negative and series contains negative values, unnable to apply transformation"
@@ -164,7 +164,7 @@ class TimeSeries:
         data = np.power(self.data, power)
         return TimeSeries(data, f"pow{power}_{self.name}")
 
-    def box_cox(self, lmd: Optional[float] = None) -> tuple[TimeSeries, float]:
+    def box_cox(self, lmd: Optional[float] = None) -> tuple['TimeSeries', float]:
         if (self.data <= 0).any():
             raise ValueError(
                 "Series contains negative values, unnable to apply 'box-cox' transformation"
@@ -183,22 +183,22 @@ class TimeSeries:
             )
         return TimeSeries(series, name), best_lambda
 
-    def with_name(self, name: str) -> TimeSeries:
+    def with_name(self, name: str) -> 'TimeSeries':
         data = self.data.copy()
         data.columns = [name]
         return TimeSeries(data, name)
 
-    def with_index_name(self, index_name) -> TimeSeries:
+    def with_index_name(self, index_name) -> 'TimeSeries':
         data = self.data.copy()
         data.index.name = index_name
         return TimeSeries(data, self.name)
 
-    def with_index(self, index: pd.DatetimeIndex) -> TimeSeries:
+    def with_index(self, index: pd.DatetimeIndex) -> 'TimeSeries':
         index = pd.to_datetime(index)
         self.data.index = index
         return TimeSeries(self.data, self.name)
 
-    def to_numeric(self, errors: str = "coerce") -> TimeSeries:
+    def to_numeric(self, errors: str = "coerce") -> 'TimeSeries':
         data = pd.to_numeric(self.data, errors=errors)
         return TimeSeries(data, self.name)
 
@@ -220,11 +220,11 @@ class TimeSeries:
     def stddev(self) -> float:
         return self.data.std()
 
-    def replace_na(self, value: float) -> TimeSeries:
+    def replace_na(self, value: float) -> 'TimeSeries':
         data = self.data.fillna(value)
         return TimeSeries(data, self.name)
 
-    def apply(self, f: Callable[[pd.Series], pd.Series]) -> TimeSeries:
+    def apply(self, f: Callable[[pd.Series], pd.Series]) -> 'TimeSeries':
         data = f(self.data)
         return TimeSeries(data, f"{f.__name__}_{self.name}")
 
@@ -234,7 +234,7 @@ class TimeSeries:
 
     def diff(
         self, order: int = 1, seasonal_lag: int = 0, seasonal_order: int = 0
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         temp = self.data.copy()
         if seasonal_lag > 0 and seasonal_order > 0:
             for _ in range(seasonal_order):
@@ -248,7 +248,7 @@ class TimeSeries:
             suffix += f"_Sord{seasonal_order}_Slag{seasonal_lag}"
         return TimeSeries(temp, f"{self.name}{suffix}")
 
-    def moving_avg(self, kernel_range: int) -> TimeSeries:
+    def moving_avg(self, kernel_range: int) -> 'TimeSeries':
         temp = np.zeros(shape=(2 * kernel_range + len(self.data),))
         temp[kernel_range:-kernel_range] = self.data.copy()
         temp[:kernel_range] = np.array([self.data.iloc[0] for _ in range(kernel_range)])
@@ -263,14 +263,14 @@ class TimeSeries:
         data = pd.Series(temp, self.data.index)
         return TimeSeries(data, f"mov_avg_{kernel_range}_{self.name}")
 
-    def smooth_moving_avg(self, window: int, center: bool = False) -> TimeSeries:
+    def smooth_moving_avg(self, window: int, center: bool = False) -> 'TimeSeries':
         data = self.data.rolling(window=window, center=center).mean()
         data = data.dropna()
         return TimeSeries(data, f"SMA_{window}_{self.name}")
 
     def smooth_exponential(
         self, span: Optional[int] = None, alpha: Optional[float] = None
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         if span:
             data = self.data.ewm(span=span).mean()
             suffix = f"span{span}"
@@ -284,7 +284,7 @@ class TimeSeries:
         trend: Optional[str] = None,
         seasonal: Optional[str] = None,
         seasonal_periods: Optional[int] = None,
-    ) -> TimeSeries:
+    ) -> 'TimeSeries':
         data = self.data
         if data.index.freq is None:
             try:
@@ -359,11 +359,15 @@ class TimeSeries:
         test_fraction: Optional[float] = None,
         split_index: Optional[_Index] = None,
         random_state: Optional[np.random.RandomState] = None,
-    ) -> tuple[TimeSeries, TimeSeries]:
+    ) -> tuple['TimeSeries', 'TimeSeries']:
         raise NotImplementedError()
 
     def plot_acf(
-        self, lags: int = 20, alpha: float = 0.05, return_values: bool = False
+        self,
+        lags: int = 20,
+        alpha: float = 0.05,
+        return_values: bool = False,
+        show_first: bool = True,
     ):
         fig, ax = plt.subplots(figsize=(10, 5))
         plot_acf(
@@ -371,7 +375,7 @@ class TimeSeries:
             lags=lags,
             alpha=alpha,
             ax=ax,
-            zero=True,
+            zero=show_first,
             title=f"Simple autocorrelation (SAC) - {self.name}",
         )
         plt.xlabel("Lags")
@@ -385,6 +389,7 @@ class TimeSeries:
         alpha: float = 0.05,
         method: str = "ywm",
         return_values: bool = False,
+        show_first: bool = True,
     ):
         fig, ax = plt.subplots(figsize=(10, 5))
         plot_pacf(
@@ -393,7 +398,7 @@ class TimeSeries:
             alpha=alpha,
             method=method,
             ax=ax,
-            zero=True,
+            zero=show_first,
             title=f"Partial autocorrelation (PAC) - {self.name}",
         )
         plt.xlabel("Lags")
@@ -401,27 +406,28 @@ class TimeSeries:
         if return_values:
             return pacf(self.data[self.name], lags)
 
-    def plot_correlograms(self, lags: int = 20):
+    def plot_correlograms(self, lags: int = 20, show_first: bool = True):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
         plot_acf(
             self.get_values(),
             lags=lags,
-            zero=True,
+            zero=show_first,
             ax=ax1,
             title=f"SAC - {self.name}",
         )
         plot_pacf(
             self.get_values(),
             lags=lags,
-            zero=True,
+            zero=show_first,
             method="ywm",
             ax=ax2,
             title=f"PAC - {self.name}",
         )
         plt.show()
 
-    def plot(self):
-        self.data.plot(title=self.name)
+    def plot(self, *args, **kwargs):
+        plt.figure(figsize=(10, 5))
+        self.data.plot(title=self.name, *args, **kwargs)
         plt.show()
 
 

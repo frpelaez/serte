@@ -20,13 +20,11 @@ def main():
     decomp = gnp.decompose(period=4)
     decomp.plot()
 
-    nsdiffs = gnp.nsdiffs(period=4)
-    print(nsdiffs)
-    gnp_sdiff = gnp.diff(order=0, seasonal_lag=4, seasonal_order=nsdiffs)
-    gnp_sdiff.plot()
-
     gnp.plot_correlograms()
-
+    
+    gnp_est = gnp.log().diff(order=0, seasonal_lag=4, seasonal_order=1)
+    gnp_est.plot()
+    gnp_est.plot_correlograms()
 
 if __name__ == "__main__":
     main()
