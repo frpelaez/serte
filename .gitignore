@@ -4,9 +4,4 @@ build/
 dist/
 wheels/
 *.egg-info
-
 .venv
-
-gnp/
-data/
-__marimo__/
