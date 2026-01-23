@@ -213,9 +213,13 @@ class TimeSeries:
         data.index.name = index_name
         return TimeSeries(data, self.name)
 
-    def with_index(self, index: pd.DatetimeIndex) -> "TimeSeries":
+    def with_index(
+        self, index: pd.DatetimeIndex, name: Optional[str] = None
+    ) -> "TimeSeries":
         index = pd.to_datetime(index)
         self.data.index = index
+        if name:
+            self.data.index.name = name
         return TimeSeries(self.data, self.name)
 
     def to_numeric(self, errors: str = "coerce") -> "TimeSeries":
