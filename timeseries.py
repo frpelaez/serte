@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf, pacf
@@ -13,7 +14,7 @@ from decomposition import DecompositionResult
 
 
 class TimeSeries:
-    def __init__(self, data: pd.Series, name: str = "series") -> 'TimeSeries':
+    def __init__(self, data: pd.Series, name: str = "series") -> "TimeSeries":
         if not isinstance(data, pd.Series):
             raise TypeError("Provided data must be a pandas Series")
         self.data = data.sort_index()
@@ -26,7 +27,7 @@ class TimeSeries:
     @staticmethod
     def from_dataframe(
         df: pd.DataFrame, value_col_name: str, index_col_name: Optional[str] = None
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         if index_col_name:
             df = df.set_index(index_col_name)
             df.index = pd.to_datetime(df.index)
@@ -35,7 +36,7 @@ class TimeSeries:
     @staticmethod
     def from_csv(
         filepath: str, value_col_name: str, index_col_name: str, **kwargs
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         df = pd.read_csv(
             filepath, parse_dates=[index_col_name], index_col=index_col_name, **kwargs
         )
@@ -44,7 +45,7 @@ class TimeSeries:
     @staticmethod
     def from_excel(
         filepath: str, value_col_name: str, index_col_name: str, sheet_name=0, **kwargs
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         df = pd.read_excel(
             filepath,
             sheet_name=sheet_name,
@@ -57,7 +58,7 @@ class TimeSeries:
     @staticmethod
     def from_json(
         filepath: str, value_col_name: str, index_col_name: str, **kwargs
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         df = pd.read_json(filepath, convert_dates=False, **kwargs)
         if index_col_name in df.columns:
             df = df.set_index(index_col_name)
@@ -74,7 +75,7 @@ class TimeSeries:
         value_col_name: str,
         index_col_name: str,
         convert_categoricals: bool = True,
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         df = pd.read_spss(filepath, convert_categoricals=convert_categoricals)
         if index_col_name in df.columns:
             df = df.set_index(index_col_name)
@@ -94,6 +95,25 @@ class TimeSeries:
 
     def to_list(self) -> list[tuple[...]]:
         return list(zip(self.times, self.values))
+
+    def subset(
+        self, start_date: Optional[str] = None, end_date: Optional[str] = None
+    ) -> "TimeSeries":
+        data = self.data.loc[start_date:end_date].copy()
+        if data.empty:
+            print(
+                f"WARN: The range {start_date} - {end_date} does not contain any values"
+            )
+        return TimeSeries(data, f"{self.name}_subset")
+
+    def __getitem__(self, index) -> "TimeSeries":
+        if isinstance(index, slice):
+            return self.subset(index.start, index.stop)
+        try:
+            data = self.data.loc[index].copy()
+            return TimeSeries(data, f"{self.name}_{str(index)}")
+        except KeyError:
+            raise KeyError(f"Date or range outside bounds '{index}'")
 
     def get_times(self) -> pd.DatetimeIndex:
         return self.data.index
@@ -132,7 +152,7 @@ class TimeSeries:
     def __len__(self) -> int:
         return self.size()
 
-    def log(self) -> 'TimeSeries':
+    def log(self) -> "TimeSeries":
         if (self.data <= 0).any():
             raise ValueError(
                 "Series contains negative values, unnable to apply 'log' transformation"
@@ -140,7 +160,7 @@ class TimeSeries:
         data = np.log(self.data)
         return TimeSeries(data, f"log_{self.name}")
 
-    def sqrt(self) -> 'TimeSeries':
+    def sqrt(self) -> "TimeSeries":
         if (self.data <= 0).any():
             raise ValueError(
                 "Series contains negative values, unnable to apply 'sqrt' transformation"
@@ -148,7 +168,7 @@ class TimeSeries:
         data = np.sqrt(self.data)
         return TimeSeries(data, f"sqrt_{self.name}")
 
-    def inv(self) -> 'TimeSeries':
+    def inv(self) -> "TimeSeries":
         if (self.data == 0).any():
             raise ValueError(
                 "Series contains null values, unnable to apply 'inv' transformation"
@@ -156,7 +176,7 @@ class TimeSeries:
         data = 1 / self.data
         return TimeSeries(data, f"inv_{self.name}")
 
-    def pow(self, power: float) -> 'TimeSeries':
+    def pow(self, power: float) -> "TimeSeries":
         if power < 0 and (self.data <= 0).any():
             raise ValueError(
                 "Provided power is negative and series contains negative values, unnable to apply transformation"
@@ -164,7 +184,7 @@ class TimeSeries:
         data = np.power(self.data, power)
         return TimeSeries(data, f"pow{power}_{self.name}")
 
-    def box_cox(self, lmd: Optional[float] = None) -> tuple['TimeSeries', float]:
+    def box_cox(self, lmd: Optional[float] = None) -> tuple["TimeSeries", float]:
         if (self.data <= 0).any():
             raise ValueError(
                 "Series contains negative values, unnable to apply 'box-cox' transformation"
@@ -183,22 +203,22 @@ class TimeSeries:
             )
         return TimeSeries(series, name), best_lambda
 
-    def with_name(self, name: str) -> 'TimeSeries':
+    def with_name(self, name: str) -> "TimeSeries":
         data = self.data.copy()
         data.columns = [name]
         return TimeSeries(data, name)
 
-    def with_index_name(self, index_name) -> 'TimeSeries':
+    def with_index_name(self, index_name) -> "TimeSeries":
         data = self.data.copy()
         data.index.name = index_name
         return TimeSeries(data, self.name)
 
-    def with_index(self, index: pd.DatetimeIndex) -> 'TimeSeries':
+    def with_index(self, index: pd.DatetimeIndex) -> "TimeSeries":
         index = pd.to_datetime(index)
         self.data.index = index
         return TimeSeries(self.data, self.name)
 
-    def to_numeric(self, errors: str = "coerce") -> 'TimeSeries':
+    def to_numeric(self, errors: str = "coerce") -> "TimeSeries":
         data = pd.to_numeric(self.data, errors=errors)
         return TimeSeries(data, self.name)
 
@@ -220,11 +240,11 @@ class TimeSeries:
     def stddev(self) -> float:
         return self.data.std()
 
-    def replace_na(self, value: float) -> 'TimeSeries':
+    def replace_na(self, value: float) -> "TimeSeries":
         data = self.data.fillna(value)
         return TimeSeries(data, self.name)
 
-    def apply(self, f: Callable[[pd.Series], pd.Series]) -> 'TimeSeries':
+    def apply(self, f: Callable[[pd.Series], pd.Series]) -> "TimeSeries":
         data = f(self.data)
         return TimeSeries(data, f"{f.__name__}_{self.name}")
 
@@ -234,7 +254,7 @@ class TimeSeries:
 
     def diff(
         self, order: int = 1, seasonal_lag: int = 0, seasonal_order: int = 0
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         temp = self.data.copy()
         if seasonal_lag > 0 and seasonal_order > 0:
             for _ in range(seasonal_order):
@@ -248,7 +268,7 @@ class TimeSeries:
             suffix += f"_Sord{seasonal_order}_Slag{seasonal_lag}"
         return TimeSeries(temp, f"{self.name}{suffix}")
 
-    def moving_avg(self, kernel_range: int) -> 'TimeSeries':
+    def moving_avg(self, kernel_range: int) -> "TimeSeries":
         temp = np.zeros(shape=(2 * kernel_range + len(self.data),))
         temp[kernel_range:-kernel_range] = self.data.copy()
         temp[:kernel_range] = np.array([self.data.iloc[0] for _ in range(kernel_range)])
@@ -263,14 +283,14 @@ class TimeSeries:
         data = pd.Series(temp, self.data.index)
         return TimeSeries(data, f"mov_avg_{kernel_range}_{self.name}")
 
-    def smooth_moving_avg(self, window: int, center: bool = False) -> 'TimeSeries':
+    def smooth_moving_avg(self, window: int, center: bool = False) -> "TimeSeries":
         data = self.data.rolling(window=window, center=center).mean()
         data = data.dropna()
         return TimeSeries(data, f"SMA_{window}_{self.name}")
 
     def smooth_exponential(
         self, span: Optional[int] = None, alpha: Optional[float] = None
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         if span:
             data = self.data.ewm(span=span).mean()
             suffix = f"span{span}"
@@ -284,7 +304,7 @@ class TimeSeries:
         trend: Optional[str] = None,
         seasonal: Optional[str] = None,
         seasonal_periods: Optional[int] = None,
-    ) -> 'TimeSeries':
+    ) -> "TimeSeries":
         data = self.data
         if data.index.freq is None:
             try:
@@ -353,14 +373,103 @@ class TimeSeries:
         resid_ts = TimeSeries(pd.Series(res.resid).dropna(), f"resid_{self.name}")
         return DecompositionResult(self, trend_ts, seasonal_ts, resid_ts)
 
-    def split_train_test[_Index](
+    def split_train_test(
+        self, test_size: float | int = 0.2
+    ) -> tuple["TimeSeries", "TimeSeries"]:
+        n = len(self.data)
+        if isinstance(test_size, float) and 0.0 < test_size < 1.0:
+            split_idx = int(n * (1 - test_size))
+        elif isinstance(test_size, int):
+            if not (0 < test_size < n):
+                raise ValueError(
+                    f"test_size ({test_size}) must be smaller than the number of samples ({n})"
+                )
+            split_idx = n - test_size
+        else:
+            raise ValueError(
+                "test_size must either be a float in (0, 1) or an integer in (0, #samples)"
+            )
+        train_data = self.data.iloc[:split_idx].copy()
+        train_srs = TimeSeries(train_data, f"{self.name}_train")
+        test_data = self.data.iloc[split_idx:].copy()
+        test_srs = TimeSeries(test_data, f"{self.name}_test")
+        return train_srs, test_srs
+
+    def fit_arima(
         self,
-        train_fraction: Optional[float] = 0.8,
-        test_fraction: Optional[float] = None,
-        split_index: Optional[_Index] = None,
-        random_state: Optional[np.random.RandomState] = None,
-    ) -> tuple['TimeSeries', 'TimeSeries']:
-        raise NotImplementedError()
+        order: tuple[int, int, int],
+        seasonal_order: tuple[int, int, int, int] = (0, 0, 0, 0),
+    ):
+        model = ARIMA(
+            self.data.to_numpy(),
+            order=order,
+            seasonal_order=seasonal_order,
+            enforce_stationarity=False,
+            enforce_invertibility=False,
+        )
+        self.model_fitted = model.fit()
+        return self.model_fitted.summary()
+
+    def predict_arima(
+        self, steps: int = 12, plot: bool = True, freq: Literal["Y", "ME", "D"] = "D"
+    ) -> pd.DataFrame:
+        if not hasattr(self, "model_fitted"):
+            raise ValueError("Before predicting, '.fit_arima()' must be called")
+        forecast_res = self.model_fitted.get_forecast(steps=steps)
+        pred_mean = forecast_res.predicted_mean
+        pred_conf = forecast_res.conf_int()
+        # freq = pd.infer_freq(self.data.index)
+        future_index = pd.date_range(
+            start=self.get_times()[-1], periods=steps, freq=freq
+        )
+        forecast_df = pd.DataFrame(
+            {
+                "pred": pred_mean,
+                "lower": pred_conf[:, 0],
+                "upper": pred_conf[:, 1],
+            },
+            index=future_index,
+        )
+        print(future_index)
+        if plot:
+            plt.figure(figsize=(12, 6))
+            history_to_plot = self.data.tail(50)
+            plt.plot(
+                history_to_plot.index,
+                history_to_plot.to_numpy(),
+                label="History",
+                color="black",
+            )
+            plt.plot(
+                forecast_df.index,
+                forecast_df["pred"],
+                label="Prediction",
+                color="red",
+                linestyle="--",
+            )
+            plt.fill_between(
+                forecast_df.index,
+                forecast_df["lower"],
+                forecast_df["upper"],
+                color="pink",
+                alpha=0.3,
+                label="Confidence interval 95%",
+            )
+            plt.title(f"ARIMA prediction: next {steps} periods")
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plt.show()
+        return forecast_df
+
+    def plot_split(self, train_series: TimeSeries, test_series: TimeSeries):
+        plt.figure(figsize=(12, 6))
+        plt.plot(train_series.data, label="Train", color="blue")
+        plt.plot(test_series.data, label="Test", color="orange")
+        last_train_date = train_series.data.index[-1]
+        plt.axvline(last_train_date, color="black", linestyle="--", alpha=0.5)
+        plt.title(f"Train/Test Split - {self.name}")
+        plt.legend()
+        plt.show()
 
     def plot_acf(
         self,

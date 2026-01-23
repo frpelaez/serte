@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.16.2"
-app = marimo.App(width="medium", auto_download=["ipynb"])
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -62,17 +62,15 @@ def _(casas_bxcx_sdiff):
 
 
 @app.cell
-def _(mo):
-    mo.md(
-        r"""Tenemos que la gráfica de FAS decae lentamente, mientras que en la del FAP tenemos un corte abrupto después del lag 1. Con la diferenciación que habíamos hecho, tenemos d = 1 y p = 1."""
-    )
-    return
-
-
-@app.cell
 def _():
     import marimo as mo
     return (mo,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""Tenemos que la gráfica de FAS decae lentamente, mientras que en la del FAP tenemos un corte abrupto después del lag 1. Con la diferenciación que habíamos hecho, tenemos d = 1 y p = 1.""")
+    return
 
 
 if __name__ == "__main__":
